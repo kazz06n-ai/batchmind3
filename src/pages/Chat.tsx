@@ -21,6 +21,8 @@ interface Note {
   id: string;
   title: string;
   content: string;
+  updated_at?: string;
+  created_at?: string;
 }
 
 export default function Chat() {
@@ -77,13 +79,15 @@ export default function Chat() {
       const notesSnapshot = await getDocs(notesQ);
       const notes = notesSnapshot.docs.map(doc => doc.data() as Note);
       
-      const notesContext = notes.map(n => `Title: ${n.title}\nContent: ${n.content}`).join('\n\n');
+      const notesContext = notes.map(n => `Title: ${n.title}\nUpdated At: ${n.updated_at || n.created_at || 'Unknown'}\nContent: ${n.content}`).join('\n\n');
 
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
       
       const systemInstruction = `You are BatchMind AI, the study assistant for a university batch.
 Your knowledge comes EXCLUSIVELY from the batch notes provided below AND Google Search for up-to-date information.
+The current date and time is ${new Date().toISOString()}.
 Rules:
+- If the user asks for notes updated on a specific date, filter the provided notes by their "Updated At" date and summarize or list them.
 - If the answer is not in the provided notes, say exactly: "This topic isn't covered in your batch notes yet. Consider adding it!"
 - Always cite the source note title at the end of your answer if using notes.
 - Keep answers concise, clear, and student-friendly.

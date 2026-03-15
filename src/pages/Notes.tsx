@@ -10,6 +10,7 @@ import * as mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
 // @ts-ignore
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+import MDEditor from '@uiw/react-md-editor';
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
@@ -18,6 +19,8 @@ interface Note {
   id: string;
   batch_id: string;
   created_by: string;
+  author_name?: string;
+  updated_by_name?: string;
   title: string;
   content: string;
   subject: string;
@@ -118,6 +121,8 @@ export default function Notes() {
         id: noteId,
         batch_id: profile.batch_id || 'admin-batch',
         created_by: user.uid,
+        author_name: profile.name || user.displayName || user.email || 'Unknown',
+        updated_by_name: profile.name || user.displayName || user.email || 'Unknown',
         title: newTitle,
         content: newContent,
         subject: newSubject,
@@ -226,14 +231,17 @@ export default function Notes() {
                     className="hidden" 
                   />
                 </div>
-                <textarea
-                  required
-                  rows={8}
-                  value={newContent}
-                  onChange={e => setNewContent(e.target.value)}
-                  className="w-full px-4 py-2 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none font-mono text-sm"
-                  placeholder="Write your notes here or upload a file..."
-                />
+                <div data-color-mode="light">
+                  <MDEditor
+                    value={newContent}
+                    onChange={(val) => setNewContent(val || '')}
+                    height={400}
+                    className="w-full rounded-xl overflow-hidden border border-zinc-300 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500"
+                    previewOptions={{
+                      className: 'prose prose-zinc max-w-none'
+                    }}
+                  />
+                </div>
               </div>
               <div className="flex justify-end gap-3">
                 <button
@@ -265,7 +273,12 @@ export default function Notes() {
               <h3 className="text-lg font-semibold text-zinc-900 mb-2 line-clamp-2">{note.title}</h3>
               <p className="text-zinc-500 text-sm line-clamp-3 flex-grow">{note.content}</p>
               <div className="mt-4 text-xs text-zinc-400 flex items-center justify-between">
-                <span>{format(new Date(note.created_at), 'MMM d, yyyy')}</span>
+                <div className="flex flex-col gap-1">
+                  <span>{format(new Date(note.created_at), 'MMM d, yyyy')}</span>
+                  <span className="text-[10px] text-zinc-500">
+                    updated by "{note.updated_by_name || note.author_name || 'Unknown'}"
+                  </span>
+                </div>
                 <div className="flex items-center gap-3">
                   <span className="flex items-center gap-1 text-emerald-600">
                     👍 {note.likes || 0}

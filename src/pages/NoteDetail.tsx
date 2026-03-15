@@ -4,14 +4,17 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase';
 import { doc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
 import { handleFirestoreError, OperationType } from '../firestore-utils';
-import { ArrowLeft, Sparkles, Loader2, Trash2, ThumbsUp, ThumbsDown } from 'lucide-react';
+import { ArrowLeft, Sparkles, Loader2, Trash2, ThumbsUp, ThumbsDown, Edit2, Save, X } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { GoogleGenAI } from '@google/genai';
+import MDEditor from '@uiw/react-md-editor';
 
 interface Note {
   id: string;
   batch_id: string;
   created_by: string;
+  author_name?: string;
+  updated_by_name?: string;
   title: string;
   content: string;
   subject: string;
@@ -30,6 +33,12 @@ export default function NoteDetail() {
   const navigate = useNavigate();
   const [note, setNote] = useState<Note | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editSubject, setEditSubject] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const isSuperAdmin = profile?.role === 'super_admin' || user?.email === 'piyush19sn@gmail.com';
   const isBatchAdmin = profile?.role === 'admin' && profile?.batch_id === note?.batch_id;
@@ -162,6 +171,25 @@ ${note.content}`;
     }
   };
 
+  const handleSave = async () => {
+    if (!noteId) return;
+    setIsSaving(true);
+    try {
+      await updateDoc(doc(db, 'notes', noteId), {
+        title: editTitle,
+        subject: editSubject,
+        content: editContent,
+        updated_by_name: profile?.name || user?.displayName || user?.email || 'Unknown',
+        updated_at: new Date().toISOString()
+      });
+      setIsEditing(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, `notes/${noteId}`);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (!note) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   let summaryData = null;
@@ -176,6 +204,7 @@ ${note.content}`;
   const hasLiked = user && (note.liked_by || []).includes(user.uid);
   const hasDisliked = user && (note.disliked_by || []).includes(user.uid);
   const canDelete = isSuperAdmin || isBatchAdmin || (user && note.created_by === user.uid);
+  const canEdit = canDelete;
 
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col md:flex-row">
@@ -185,47 +214,123 @@ ${note.content}`;
             <Link to="/notes" className="text-zinc-500 hover:text-zinc-900 transition-colors">
               <ArrowLeft size={20} />
             </Link>
-            <div className="font-medium text-zinc-900 truncate">{note.title}</div>
+            <div className="font-medium text-zinc-900 truncate">{isEditing ? 'Edit Note' : note.title}</div>
           </div>
-          {canDelete && (
-            <button 
-              onClick={handleDelete}
-              className="text-red-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
-            >
-              <Trash2 size={16} /> Delete Note
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            {canEdit && !isEditing && (
+              <button 
+                onClick={() => {
+                  setEditTitle(note.title);
+                  setEditSubject(note.subject);
+                  setEditContent(note.content);
+                  setIsEditing(true);
+                }}
+                className="text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 p-2 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+              >
+                <Edit2 size={16} /> Edit
+              </button>
+            )}
+            {canDelete && !isEditing && (
+              <button 
+                onClick={handleDelete}
+                className="text-red-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+              >
+                <Trash2 size={16} /> Delete
+              </button>
+            )}
+            {isEditing && (
+              <>
+                <button 
+                  onClick={() => setIsEditing(false)}
+                  className="text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 p-2 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium"
+                >
+                  <X size={16} /> Cancel
+                </button>
+                <button 
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 p-2 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium disabled:opacity-50"
+                >
+                  {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Save
+                </button>
+              </>
+            )}
+          </div>
         </nav>
 
         <main className="max-w-3xl mx-auto p-6 md:p-12">
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <span className="px-3 py-1 bg-zinc-100 text-zinc-600 text-sm font-medium rounded-md uppercase tracking-wider inline-block">
-                {note.subject}
-              </span>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={handleLike}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-colors ${hasLiked ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}
-                >
-                  <ThumbsUp size={16} className={hasLiked ? 'fill-emerald-700' : ''} />
-                  {note.likes || 0}
-                </button>
-                <button 
-                  onClick={handleDislike}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-colors ${hasDisliked ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}
-                >
-                  <ThumbsDown size={16} className={hasDisliked ? 'fill-red-700' : ''} />
-                  {note.dislikes || 0}
-                </button>
+          {isEditing ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={editTitle}
+                    onChange={e => setEditTitle(e.target.value)}
+                    className="w-full px-4 py-2 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 mb-1">Subject</label>
+                  <input
+                    type="text"
+                    required
+                    value={editSubject}
+                    onChange={e => setEditSubject(e.target.value)}
+                    className="w-full px-4 py-2 border border-zinc-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  />
+                </div>
+              </div>
+              <div data-color-mode="light">
+                <label className="block text-sm font-medium text-zinc-700 mb-1">Content</label>
+                <MDEditor
+                  value={editContent}
+                  onChange={(val) => setEditContent(val || '')}
+                  height={500}
+                  className="w-full rounded-xl overflow-hidden border border-zinc-300 focus-within:ring-2 focus-within:ring-emerald-500 focus-within:border-emerald-500"
+                  previewOptions={{
+                    className: 'prose prose-zinc max-w-none'
+                  }}
+                />
               </div>
             </div>
-            <h1 className="text-4xl font-bold text-zinc-900 mb-4">{note.title}</h1>
-          </div>
-          
-          <div className="prose prose-zinc max-w-none">
-            <Markdown>{note.content}</Markdown>
-          </div>
+          ) : (
+            <>
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="px-3 py-1 bg-zinc-100 text-zinc-600 text-sm font-medium rounded-md uppercase tracking-wider inline-block">
+                    {note.subject}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button 
+                      onClick={handleLike}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-colors ${hasLiked ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}
+                    >
+                      <ThumbsUp size={16} className={hasLiked ? 'fill-emerald-700' : ''} />
+                      {note.likes || 0}
+                    </button>
+                    <button 
+                      onClick={handleDislike}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-colors ${hasDisliked ? 'bg-red-50 border-red-200 text-red-700' : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-50'}`}
+                    >
+                      <ThumbsDown size={16} className={hasDisliked ? 'fill-red-700' : ''} />
+                      {note.dislikes || 0}
+                    </button>
+                  </div>
+                </div>
+                <h1 className="text-4xl font-bold text-zinc-900 mb-4">{note.title}</h1>
+                <div className="text-sm text-zinc-500 mb-8">
+                  updated by "{note.updated_by_name || note.author_name || 'Unknown'}"
+                </div>
+              </div>
+              
+              <div className="prose prose-zinc max-w-none">
+                <Markdown>{note.content}</Markdown>
+              </div>
+            </>
+          )}
         </main>
       </div>
 
