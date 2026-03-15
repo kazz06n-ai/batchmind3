@@ -1,0 +1,132 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "piyush19sn@gmail.com" && request.auth.token.email_verified == true) ||
+        getUserData().role == 'super_admin'
+      );
+    }
+
+    function isBatchMember(batchId) {
+      return isAuthenticated() && getUserData().batch_id == batchId;
+    }
+
+    function isBatchAdmin(batchId) {
+      return isAuthenticated() && getUserData().batch_id == batchId && getUserData().role == 'admin';
+    }
+
+    function isBatchCreator(batchId) {
+      return isAuthenticated() && exists(/databases/$(database)/documents/batches/$(batchId)) && get(/databases/$(database)/documents/batches/$(batchId)).data.created_by == request.auth.uid;
+    }
+
+    function isBatchAdminOrCreator(batchId) {
+      return isBatchAdmin(batchId) || isBatchCreator(batchId);
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.created_by;
+    }
+
+    function hasOnlyAllowedFields(allowedFields) {
+      return request.resource.data.keys().hasOnly(allowedFields);
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+    function isValidUser(data) {
+      return data.id is string &&
+             data.email is string &&
+             data.name is string &&
+             data.role in ['student', 'admin', 'super_admin'] &&
+             data.created_at is string;
+    }
+
+    function isValidBatch(data) {
+      return data.id is string &&
+             data.name is string &&
+             data.university is string &&
+             data.year is number &&
+             data.department is string &&
+             data.invite_code is string &&
+             data.created_by is string &&
+             data.created_at is string;
+    }
+
+    function isValidNote(data) {
+      return data.id is string &&
+             data.batch_id is string &&
+             data.created_by is string &&
+             data.title is string &&
+             data.content is string &&
+             data.subject is string &&
+             data.likes is number &&
+             (!('dislikes' in data) || data.dislikes is number) &&
+             (!('liked_by' in data) || data.liked_by is list) &&
+             (!('disliked_by' in data) || data.disliked_by is list) &&
+             (!('ai_summary' in data) || data.ai_summary is string) &&
+             data.created_at is string &&
+             data.updated_at is string;
+    }
+
+    function isValidChatMessage(data) {
+      return data.id is string &&
+             data.user_id is string &&
+             data.batch_id is string &&
+             data.role in ['user', 'assistant'] &&
+             data.content is string &&
+             data.created_at is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isAuthenticated(); 
+      allow create: if isSuperAdmin() || (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.id == userId && (request.resource.data.role == 'student' || (request.auth.token.email == 'piyush19sn@gmail.com' && request.resource.data.role == 'super_admin')));
+      allow update: if isSuperAdmin() || 
+        (isOwner(userId) && isValidUser(request.resource.data) && request.resource.data.id == userId && request.resource.data.role == resource.data.role) ||
+        (isAuthenticated() && resource.data.batch_id != null && isBatchAdminOrCreator(resource.data.batch_id) && request.resource.data.batch_id == resource.data.batch_id && request.resource.data.role in ['student', 'admin'] && isValidUser(request.resource.data) && request.resource.data.id == userId);
+      allow delete: if isSuperAdmin();
+    }
+
+    match /batches/{batchId} {
+      allow read: if isAuthenticated();
+      allow create: if isSuperAdmin() || (isAuthenticated() && isValidBatch(request.resource.data) && request.resource.data.id == batchId && request.resource.data.created_by == request.auth.uid);
+      allow update: if isSuperAdmin() || (isBatchAdminOrCreator(batchId) && isValidBatch(request.resource.data) && request.resource.data.id == batchId && request.resource.data.created_by == resource.data.created_by);
+      allow delete: if isSuperAdmin() || isBatchCreator(batchId);
+    }
+
+    match /notes/{noteId} {
+      allow read: if isSuperAdmin() || isBatchMember(resource.data.batch_id);
+      allow create: if isSuperAdmin() || (isBatchMember(request.resource.data.batch_id) && isValidNote(request.resource.data) && request.resource.data.id == noteId && request.resource.data.created_by == request.auth.uid);
+      allow update: if isSuperAdmin() || (isBatchMember(resource.data.batch_id) && isValidNote(request.resource.data) && request.resource.data.id == noteId && request.resource.data.batch_id == resource.data.batch_id && request.resource.data.created_by == resource.data.created_by);
+      allow delete: if isSuperAdmin() || isDocOwner() || isBatchAdminOrCreator(resource.data.batch_id);
+    }
+
+    match /chat_messages/{messageId} {
+      allow read: if isSuperAdmin() || isBatchMember(resource.data.batch_id);
+      allow create: if isSuperAdmin() || (isBatchMember(request.resource.data.batch_id) && isValidChatMessage(request.resource.data) && request.resource.data.id == messageId && (request.resource.data.user_id == request.auth.uid || request.resource.data.role == 'assistant'));
+      allow delete: if isSuperAdmin() || isBatchAdminOrCreator(resource.data.batch_id);
+    }
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "BatchMind AI",
+  "description": "Collaborative academic intelligence platform for university student batches with Gemini Live API and Search Grounding.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

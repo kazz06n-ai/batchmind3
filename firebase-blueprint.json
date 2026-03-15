@@ -1,0 +1,88 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the BatchMind AI platform.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Synced with Supabase/Firebase Auth user id" },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "university": { "type": "string" },
+        "department": { "type": "string" },
+        "batch_id": { "type": "string", "description": "Current batch ID" },
+        "role": { "type": "string", "enum": ["student", "admin"] },
+        "avatar_url": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email", "name", "role", "created_at"]
+    },
+    "Batch": {
+      "title": "Batch",
+      "description": "A university batch.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "university": { "type": "string" },
+        "year": { "type": "number" },
+        "department": { "type": "string" },
+        "invite_code": { "type": "string" },
+        "created_by": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "university", "year", "department", "invite_code", "created_by", "created_at"]
+    },
+    "Note": {
+      "title": "Note",
+      "description": "A study note.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "batch_id": { "type": "string" },
+        "created_by": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "subject": { "type": "string" },
+        "ai_summary": { "type": "string", "description": "JSON stringified summary" },
+        "likes": { "type": "number" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "batch_id", "created_by", "title", "content", "subject", "likes", "created_at", "updated_at"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A chat message in the batch.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "batch_id": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string" },
+        "source_note_id": { "type": "string" },
+        "created_at": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "user_id", "batch_id", "role", "content", "created_at"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles."
+    },
+    "/batches/{batchId}": {
+      "schema": { "$ref": "#/entities/Batch" },
+      "description": "Batches."
+    },
+    "/notes/{noteId}": {
+      "schema": { "$ref": "#/entities/Note" },
+      "description": "Notes."
+    },
+    "/chat_messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Chat messages."
+    }
+  }
+}
